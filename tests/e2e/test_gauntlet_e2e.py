@@ -260,9 +260,11 @@ def test_04_a_stranger_cannot_take_the_fee_back(
     client, account, contract, stranger
 ):
     challenge_id = _STATE["challenge"]
-    other_client = create_client(studionet, account=stranger)
 
-    touched = _attempt(other_client, stranger, contract, "withdraw_challenge", [challenge_id])
+    # The same client signs with the account passed per call, which is how the
+    # Studio suite drives a second wallet. A second client would sign as its own
+    # session account instead, and the test would prove nothing.
+    touched = _attempt(client, stranger, contract, "withdraw_challenge", [challenge_id])
     assert not _succeeded(touched), "a stranger withdrew somebody else's fee"
     assert _read(client, contract, "get_challenge", [challenge_id])["status"] == "OPEN"
 
