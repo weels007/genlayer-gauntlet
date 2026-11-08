@@ -7,7 +7,11 @@ This one covers the money paths around it, against the same pinned contract:
 - the challenger can withdraw the open challenge and get the fee back;
 - the credit is withdrawable too, and the ledger returns to where it started;
 - ``void_challenge`` is refused while it is not yet earned, and a stranger cannot
-  take somebody else's fee back.
+  take somebody else's fee back;
+- a challenger that does not finish **strictly above** the champion's stored score
+  leaves the belt where it was, whatever the committee scored;
+- a judgement nobody can ground is driven to the attempt cap and then voided by
+  the *other* account, with the fee going back to the challenger.
 
 Nothing here deploys, and every assertion is a delta, so it can be re-run.
 
@@ -40,6 +44,16 @@ CRITERIA_COUNT = 3
 CHAMPION_URL = "https://raw.githubusercontent.com/weels007/genlayer-vow/main/README.md"
 RIVAL_URL = (
     "https://raw.githubusercontent.com/weels007/genlayer-gauntlet/main/README.md"
+)
+
+# A page whose whole text folds to 19 letters: one short of the 20 the contract
+# requires before a quote can ground. Every quote taken from it is a substring of
+# that fold, so no judgement against it can ever settle — on any run, for any
+# model. That is an undecided judgement on demand, instead of waiting out the
+# seven-day timeout.
+UNGROUNDABLE_URL = (
+    "https://raw.githubusercontent.com/weels007/genlayer-gauntlet/main"
+    "/testdata/ungroundable.txt"
 )
 
 # The challenge opened in test_03 is used by the two cases after it.
@@ -75,18 +89,21 @@ def account():
 
 @pytest.fixture(scope="module")
 def stranger(account):
-    """A genuinely different signer, or skip.
+    """A genuinely different signer, or None when the repository has only one.
 
     The repository holds one deployer secret, and a second name resolves to the
-    same keystore unless its own pair is configured. Rather than prove nothing
-    with the deployer's own key, the case skips when there is only one wallet.
+    same keystore unless its own pair is configured. Proving nothing with the
+    deployer's own key would be worse than not proving it, so this returns None
+    and each caller decides: the cases where *only the caller* is allowed to act
+    skip, and the cases that are permissionless by design fall back to the
+    deployer and stay covered.
     """
     try:
         other = load_account("tester2")
     except SystemExit:
-        pytest.skip("no second wallet secret is configured")
+        return None
     if _hex(other.address) == _hex(account.address):
-        pytest.skip("the second wallet resolves to the deployer's own account")
+        return None
     return other
 
 
@@ -293,6 +310,8 @@ def test_03_a_second_challenge_becomes_a_credit(client, account, contract):
 def test_04_a_stranger_cannot_take_the_fee_back(
     client, account, contract, stranger
 ):
+    if stranger is None:
+        pytest.skip("only one wallet is configured, so a stranger would be the deployer")
     challenge_id = _STATE["challenge"]
 
     # The same client signs with the account passed per call, which is how the
@@ -359,7 +378,165 @@ def test_06_void_is_refused_before_it_is_earned(client, account, contract):
     assert _invariant_holds(client, contract)
 
 
-def test_07_views_agree_with_the_ledger(client, contract):
+# ---------------------------------------------------------------------------
+# the bar: a challenger that does not pass it cannot take the belt
+# ---------------------------------------------------------------------------
+
+
+def test_07_the_bar_cannot_be_cleared_by_equalling_it(client, account, contract):
+    """The champion's stored score is a floor, never a target to match.
+
+    A live committee cannot be ordered to return one exact score, so the case is
+    built around the law rather than around a hoped-for number: the entry judged
+    here is the champion's **own page**, already scored against this rubric, and
+    the bar is the score it set. When that bar is the maximum of the rubric no
+    page can pass more criteria than it, so the belt *must* be defended — the tie
+    is decided by arithmetic, not by the committee's mood. Otherwise the same law
+    is asserted from whichever side the committee lands on: only a score strictly
+    above the bar moves the belt, and anything at or below it leaves both the
+    holder and the money where they were.
+    """
+    _settle_our_tail(client, account, contract)
+
+    champion = _champion(client, contract)
+    bar = int(champion["score"])
+    url = champion["url"]
+    since = int(champion["since"])
+
+    summary_before = _read(client, contract, "get_summary")
+    ledger_before = _ledger(client, contract)
+    balance_before = _balance(client, contract)
+
+    challenge_id = _open_challenge(client, account, contract, url=url)
+    _expect_ok(
+        client,
+        account,
+        contract,
+        "judge",
+        [challenge_id],
+        verify=lambda: _read(client, contract, "get_challenge", [challenge_id])["status"]
+        != "OPEN",
+    )
+
+    challenge = _read(client, contract, "get_challenge", [challenge_id])
+    assert challenge["status"] in ("WON", "LOST"), challenge
+    assert len(challenge["vector"]) == CRITERIA_COUNT
+    assert int(challenge["score"]) == challenge["vector"].count("1")
+
+    champion_after = _champion(client, contract)
+    summary = _read(client, contract, "get_summary")
+
+    if challenge["status"] == "WON":
+        # Only strictly more criteria take the belt, and the fee comes back.
+        assert int(challenge["score"]) > bar
+        assert champion_after["url"] == url
+        assert _hex(champion_after["owner"]) == _hex(account.address)
+        assert int(summary["crowned"]) == int(summary_before["crowned"]) + 1
+    else:
+        assert int(challenge["score"]) <= bar
+        assert champion_after["url"] == url
+        assert champion_after["vector"] == champion["vector"]
+        assert int(champion_after["since"]) == since
+        assert int(summary["defended"]) == int(summary_before["defended"]) + 1
+        if int(challenge["score"]) == bar:
+            print(f"  the challenger matched the bar at {bar}; the belt was defended")
+
+    if bar == CRITERIA_COUNT:
+        # No page can satisfy more than every criterion, so no challenger can
+        # ever pass the champion's score: this is the tie, and it must lose.
+        assert challenge["status"] == "LOST"
+
+    ledger = _ledger(client, contract)
+    assert int(ledger["total_out"]) == int(ledger_before["total_out"]) + FEE
+    assert int(ledger["locked_total"]) == int(ledger_before["locked_total"])
+    assert _invariant_holds(client, contract)
+    assert _wait_balance(client, contract, balance_before) == balance_before
+
+
+# ---------------------------------------------------------------------------
+# the void path: a judgement nobody can ground, driven to the attempt cap
+# ---------------------------------------------------------------------------
+
+
+def test_08_an_ungroundable_challenge_is_voided_after_the_cap(
+    client, account, contract, stranger
+):
+    """Three attempts the committee cannot settle, then anyone refunds the fee.
+
+    ``test_06`` proves void is refused while it has not been earned. This drives
+    the earned case. The entry's whole text folds to nineteen letters, one short
+    of the twenty a quote needs to ground, so every judgement comes back
+    undecided: the attempts run out and the fee goes back to the challenger —
+    voided by the *other* account, because voiding is permissionless by design and
+    paying the wrong party must still be impossible.
+    """
+    _settle_our_tail(client, account, contract)
+
+    cap = int(_read(client, contract, "get_rules")["max_judgement_attempts"])
+    summary_before = _read(client, contract, "get_summary")
+    ledger_before = _ledger(client, contract)
+    balance_before = _balance(client, contract)
+
+    challenge_id = _open_challenge(client, account, contract, url=UNGROUNDABLE_URL)
+
+    # Each judgement costs a fetch and a full round of consensus, and a run whose
+    # own work fails leaves the attempt counter where it was. Keep asking until
+    # the cap is reached instead of assuming one call books one attempt.
+    last = None
+    for _ in range(cap + 5):
+        challenge = _read(client, contract, "get_challenge", [challenge_id])
+        if challenge["status"] != "OPEN" or int(challenge["attempts"]) >= cap:
+            break
+        last = _attempt(client, account, contract, "judge", [challenge_id])
+
+    challenge = _read(client, contract, "get_challenge", [challenge_id])
+    assert challenge["status"] == "OPEN", (
+        "the fixture entry produced a grounded judgement, so nothing was left "
+        f"undecided: {challenge}"
+    )
+    assert int(challenge["attempts"]) == cap, (
+        f"only {challenge['attempts']} of {cap} attempts were booked; the last "
+        f"judgement did not reach an undecided result: {last}"
+    )
+    assert challenge["vector"] == ""
+    assert _read(client, contract, "get_open_challenge") == challenge_id
+
+    # Nothing moved while the judgement was undecided.
+    ledger = _ledger(client, contract)
+    assert int(ledger["locked_total"]) == int(ledger_before["locked_total"]) + FEE
+    assert int(ledger["total_out"]) == int(ledger_before["total_out"])
+
+    # The attempts are spent: no further judgement is possible.
+    _expect_denied(client, account, contract, "judge", [challenge_id])
+
+    actor = stranger if stranger is not None else account
+    _expect_ok(
+        client,
+        actor,
+        contract,
+        "void_challenge",
+        [challenge_id],
+        verify=lambda: _read(client, contract, "get_challenge", [challenge_id])["status"]
+        == "VOID",
+    )
+
+    challenge = _read(client, contract, "get_challenge", [challenge_id])
+    assert challenge["status"] == "VOID"
+    assert _read(client, contract, "get_open_challenge") == ""
+
+    ledger = _ledger(client, contract)
+    assert int(ledger["total_out"]) == int(ledger_before["total_out"]) + FEE
+    assert int(ledger["locked_total"]) == int(ledger_before["locked_total"])
+    assert int(_read(client, contract, "get_summary")["void"]) == int(
+        summary_before["void"]
+    ) + 1
+    assert _invariant_holds(client, contract)
+
+    # The refund went to the challenger, so the contract holds what it held.
+    assert _wait_balance(client, contract, balance_before) == balance_before
+
+
+def test_09_views_agree_with_the_ledger(client, contract):
     summary = _read(client, contract, "get_summary")
     challenges = _read(client, contract, "get_challenges")
 

@@ -161,11 +161,22 @@ Residual risks, stated plainly:
 |---|---|---|
 | **Direct** | the frozen rubric, crowning, every challenge path, the score comparison, refunds, consensus on the vector | `pytest tests/direct -v` |
 | **Studio** | the deployed contract: a live crowning, a challenge scored by the committee, the fee landing where the rubric says, and the refusals | `pytest tests/integration -v -s` |
-| **End to end** | the deployed contract, the money paths around the judgement: a second challenge as a credit, both refunds, the void guard, and a stranger reaching for another account's fee | `pytest tests/e2e -v -s` |
+| **End to end** | the deployed contract, the money paths around the judgement: a second challenge as a credit, both refunds, the void guard, a stranger reaching for another account's fee, a challenger that cannot clear the bar, and an entry nobody can ground driven to the attempt cap and voided by the other account | `pytest tests/e2e -v -s` |
 
 Every assertion in the Studio suite is a delta — a count, a balance, a ledger
 total — so it can be re-run against the same contest without an earlier run
 leaking into it.
+
+`testdata/ungroundable.txt` is the fixture behind the void case: a page whose
+whole text folds to nineteen letters, one short of the twenty a quote needs to
+ground. Every quote taken from it is a substring of that fold, so no judgement
+against it can settle — on any run, for any model. The committee cannot decide it,
+the attempts run out, and the fee is refunded. That is an undecided judgement on
+demand, instead of waiting out the seven-day timeout.
+
+A tie needs no fixture: the bar is the champion's stored score, so a challenger
+judged against the champion's own page is decided by arithmetic whenever that
+score is the rubric's maximum. Nothing can pass more criteria than all of them.
 
 ## Quick start
 
@@ -184,8 +195,10 @@ The direct suite mocks the page and the model; the clock and every money path ar
 exercised in memory, including a challenge that wins, one that defends, one the
 committee cannot ground, and one that is voided after the attempt cap.
 
-The live suites sign with a throwaway Studio account that the repository keeps in
-Actions secrets, so no key material is committed.
+The live suites sign with throwaway Studio accounts that the repository keeps in
+Actions secrets — one to drive the contest, and a second for the cases that need
+a genuine stranger, since only the caller may take their own fee back — so no key
+material is committed.
 
 ## Layout
 
@@ -194,6 +207,7 @@ contracts/Gauntlet.py            the contest
 tests/direct/                    crowning, challenges, money, consensus
 tests/integration/               the deployed contest, live
 tests/e2e/                       the deployed contest's money paths
+testdata/ungroundable.txt        a page no quote can be grounded in
 scripts/deploy.py                deploys once with the rubric, records deployment.json
 scripts/wallet.py                keystore from tests/ or a repository secret
 deployment.json                  the deployed address (written by the workflow)

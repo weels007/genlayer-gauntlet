@@ -3,7 +3,9 @@ name: E2E (deployed contract)
 # The money paths the Studio suite leaves out, against the PINNED contest in
 # deployment.json: a second challenge while one is open becomes a credit, the
 # open challenge and the credit both come back, void is refused before it is
-# earned, and a stranger cannot take another account's fee.
+# earned, a stranger cannot take another account's fee, a challenger that only
+# equals the bar cannot take the belt, and a judgement nobody can ground is
+# driven to the attempt cap and voided by the other account.
 
 on:
   workflow_dispatch:
@@ -18,6 +20,7 @@ on:
   push:
     paths:
       - "tests/e2e/**"
+      - "testdata/**"
       - "deployment.json"
       - ".github/workflows/e2e.yml"
 
@@ -53,4 +56,8 @@ jobs:
         env:
           GAUNTLET_DEPLOYER_KEYSTORE: ${{ secrets.GAUNTLET_DEPLOYER_KEYSTORE }}
           GAUNTLET_DEPLOYER_PASSWORD: ${{ secrets.GAUNTLET_DEPLOYER_PASSWORD }}
+          # The "stranger" cases need a genuinely different account. Without this
+          # pair the second name resolves to the deployer and those cases skip.
+          GAUNTLET_TESTER2_KEYSTORE: ${{ secrets.GAUNTLET_TESTER2_KEYSTORE }}
+          GAUNTLET_TESTER2_PASSWORD: ${{ secrets.GAUNTLET_TESTER2_PASSWORD }}
         run: pytest tests/e2e -v -s
