@@ -242,9 +242,12 @@ def _settle_our_tail(client, account, contract):
     open_id = _read(client, contract, "get_open_challenge")
     if open_id:
         challenge = _read(client, contract, "get_challenge", [open_id])
-        if challenge["status"] == "OPEN" and _hex(challenge["challenger"]) == _hex(
-            account.address
-        ):
+        if challenge["status"] == "OPEN":
+            if _hex(challenge["challenger"]) != _hex(account.address):
+                # Somebody else's challenge is open. We cannot withdraw it, and a
+                # delta measured now would include its fee, so this run steps
+                # aside instead of failing.
+                pytest.skip("another account holds an open challenge")
             _expect_ok(client, account, contract, "withdraw_challenge", [open_id])
 
     if int(_read(client, contract, "get_credit", [account.address])) > 0:

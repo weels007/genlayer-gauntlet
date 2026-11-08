@@ -255,9 +255,9 @@ def _settle_our_tail(client, account, contract):
     open_id = _read(client, contract, "get_open_challenge")
     if open_id:
         challenge = _read(client, contract, "get_challenge", [open_id])
-        if challenge["status"] == "OPEN" and _hex(challenge["challenger"]) == _hex(
-            account.address
-        ):
+        if challenge["status"] == "OPEN":
+            if _hex(challenge["challenger"]) != _hex(account.address):
+                pytest.skip("another account holds an open challenge")
             _expect_ok(client, account, contract, "withdraw_challenge", [open_id])
 
     if _credit(client, contract, account) > 0:
