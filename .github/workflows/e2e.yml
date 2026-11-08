@@ -51,6 +51,38 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Which wallets are configured
+        if: steps.secrets.outputs.skip != 'true'
+        run: |
+          python - <<'PY'
+          import sys
+
+          sys.path.insert(0, "scripts")
+          from wallet import load_account
+
+          seen = {}
+          for name in ("tester1", "tester2"):
+              try:
+                  address = str(load_account(name).address)
+              except SystemExit as error:
+                  print(f"{name}: unavailable ({error})")
+                  continue
+              matches = [
+                  other
+                  for other, other_address in seen.items()
+                  if other_address.lower() == address.lower()
+              ]
+              print(f"{name}: {address}")
+              for other in matches:
+                  print(f"  {name} and {other} resolve to the same account")
+              seen[name] = address
+          PY
+        env:
+          GAUNTLET_DEPLOYER_KEYSTORE: ${{ secrets.GAUNTLET_DEPLOYER_KEYSTORE }}
+          GAUNTLET_DEPLOYER_PASSWORD: ${{ secrets.GAUNTLET_DEPLOYER_PASSWORD }}
+          GAUNTLET_TESTER2_KEYSTORE: ${{ secrets.GAUNTLET_TESTER2_KEYSTORE }}
+          GAUNTLET_TESTER2_PASSWORD: ${{ secrets.GAUNTLET_TESTER2_PASSWORD }}
+
       - name: End to end
         if: steps.secrets.outputs.skip != 'true'
         env:
@@ -60,4 +92,4 @@ jobs:
           # pair the second name resolves to the deployer and those cases skip.
           GAUNTLET_TESTER2_KEYSTORE: ${{ secrets.GAUNTLET_TESTER2_KEYSTORE }}
           GAUNTLET_TESTER2_PASSWORD: ${{ secrets.GAUNTLET_TESTER2_PASSWORD }}
-        run: pytest tests/e2e -v -s
+        run: pytest tests/e2e -v -s -rs

@@ -199,6 +199,10 @@ def _balance(client, contract):
     return int(_read(client, contract, "get_balance"))
 
 
+def _champion(client, contract):
+    return _read(client, contract, "get_champion")
+
+
 def _credit(client, contract, who):
     return int(_read(client, contract, "get_credit", [who.address]))
 
