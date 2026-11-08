@@ -50,6 +50,9 @@ jobs:
             echo "::notice title=E2E skipped::Add GAUNTLET_DEPLOYER_KEYSTORE and GAUNTLET_DEPLOYER_PASSWORD to drive the deployed contest."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
+          if [ -z "${{ secrets.GAUNTLET_TESTER2_KEYSTORE }}" ]; then
+            echo "::warning title=Stranger cases skipped::GAUNTLET_TESTER2_KEYSTORE is empty, so the second wallet falls back to the deployer and the cases that need a genuine stranger skip."
+          fi
 
       - name: Which wallets are configured
         if: steps.secrets.outputs.skip != 'true'

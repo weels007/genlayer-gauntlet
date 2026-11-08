@@ -174,9 +174,12 @@ against it can settle — on any run, for any model. The committee cannot decide
 the attempts run out, and the fee is refunded. That is an undecided judgement on
 demand, instead of waiting out the seven-day timeout.
 
-A tie needs no fixture: the bar is the champion's stored score, so a challenger
-judged against the champion's own page is decided by arithmetic whenever that
-score is the rubric's maximum. Nothing can pass more criteria than all of them.
+A tie needs no fixture: the bar is the champion's stored score, so when it is the
+rubric's maximum the case is arithmetic — nothing can pass more criteria than all
+of them, so every settled judgement has to lose. A settled judgement is the one
+thing a test cannot order from a live committee: if it cannot ground a quote at
+all, the challenge is undecided by design, and the run refunds the fee and reports
+that case as inconclusive rather than guessing a verdict nobody produced.
 
 ## Quick start
 
