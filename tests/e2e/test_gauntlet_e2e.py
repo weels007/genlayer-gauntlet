@@ -74,8 +74,20 @@ def account():
 
 
 @pytest.fixture(scope="module")
-def stranger():
-    return load_account("tester2")
+def stranger(account):
+    """A genuinely different signer, or skip.
+
+    The repository holds one deployer secret, and a second name resolves to the
+    same keystore unless its own pair is configured. Rather than prove nothing
+    with the deployer's own key, the case skips when there is only one wallet.
+    """
+    try:
+        other = load_account("tester2")
+    except SystemExit:
+        pytest.skip("no second wallet secret is configured")
+    if _hex(other.address) == _hex(account.address):
+        pytest.skip("the second wallet resolves to the deployer's own account")
+    return other
 
 
 @pytest.fixture(scope="module")
@@ -86,6 +98,10 @@ def client(account):
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+
+def _hex(value) -> str:
+    return str(value).lower().replace("0x", "")
 
 
 def _succeeded(result) -> bool:

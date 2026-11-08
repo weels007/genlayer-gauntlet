@@ -344,6 +344,11 @@ def test_05_a_stranger_cannot_take_the_fee_back(client, account, contract):
     assert challenge_id
 
     other = load_account("tester2")
+    if _hex(other.address) == _hex(account.address):
+        # The repository holds one deployer secret; a second name resolves to the
+        # same keystore unless its own pair is configured. Proving nothing with
+        # the deployer's own key would be worse than skipping.
+        pytest.skip("the second wallet resolves to the deployer's own account")
     other_client = create_client(studionet, account=other)
     touched = _attempt(other_client, other, contract, "withdraw_challenge", [challenge_id])
     assert not _succeeded(touched), "a stranger withdrew somebody else's fee"

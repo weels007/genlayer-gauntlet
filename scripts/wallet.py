@@ -24,8 +24,17 @@ def wallet_folder() -> Path:
     return Path(configured) if configured else DEFAULT_FOLDER
 
 
-def _keystore_from_env():
-    raw = os.environ.get(f"{PREFIX}_KEYSTORE", "").strip()
+def _keystore_from_env(name: str):
+    """The keystore for this name, or the deployer's.
+
+    A named wallet is looked up first (`GAUNTLET_TESTER2_KEYSTORE`), and only the
+    deployer falls back to `GAUNTLET_DEPLOYER_KEYSTORE`. Callers that need a
+    *different* account must check the address they get back: a single deployer
+    secret is not two wallets.
+    """
+    raw = os.environ.get(f"GAUNTLET_{name.upper()}_KEYSTORE", "").strip()
+    if not raw:
+        raw = os.environ.get(f"{PREFIX}_KEYSTORE", "").strip()
     if not raw:
         return None
     payload = raw
@@ -34,12 +43,12 @@ def _keystore_from_env():
             payload = base64.b64decode(raw).decode("utf-8")
         except Exception as error:
             raise SystemExit(
-                f"[wallet] {PREFIX}_KEYSTORE is neither JSON nor base64"
+                f"[wallet] {name}: keystore is neither JSON nor base64"
             ) from error
     try:
         return json.loads(payload)
     except Exception as error:
-        raise SystemExit(f"[wallet] {PREFIX}_KEYSTORE is not a keystore") from error
+        raise SystemExit(f"[wallet] {name}: keystore is not a keystore") from error
 
 
 def load_account(name: str = DEFAULT_WALLET):
@@ -52,7 +61,9 @@ def load_account(name: str = DEFAULT_WALLET):
     if password_path.exists():
         password = password_path.read_text(encoding="utf-8").strip()
 
-    env_password = os.environ.get(f"{PREFIX}_PASSWORD")
+    env_password = os.environ.get(f"GAUNTLET_{name.upper()}_PASSWORD")
+    if not env_password:
+        env_password = os.environ.get(f"{PREFIX}_PASSWORD")
     if env_password:
         password = env_password
 
@@ -60,7 +71,7 @@ def load_account(name: str = DEFAULT_WALLET):
     if keystore_path.exists():
         data = json.loads(keystore_path.read_text(encoding="utf-8"))
     else:
-        data = _keystore_from_env()
+        data = _keystore_from_env(name)
 
     if data is None:
         raise SystemExit(
