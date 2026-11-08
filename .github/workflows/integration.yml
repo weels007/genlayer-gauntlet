@@ -60,4 +60,7 @@ jobs:
           # pair the second name resolves to the deployer and the case skips.
           GAUNTLET_TESTER2_KEYSTORE: ${{ secrets.GAUNTLET_TESTER2_KEYSTORE }}
           GAUNTLET_TESTER2_PASSWORD: ${{ secrets.GAUNTLET_TESTER2_PASSWORD }}
+          # The same pair under the other word order.
+          GAUNTLET_TESTER_KEYSTORE2: ${{ secrets.GAUNTLET_TESTER_KEYSTORE2 }}
+          GAUNTLET_TESTER_PASSWORD2: ${{ secrets.GAUNTLET_TESTER_PASSWORD2 }}
         run: pytest tests/integration -v -s -rs

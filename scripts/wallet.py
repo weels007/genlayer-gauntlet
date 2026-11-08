@@ -4,6 +4,10 @@ Local runs read `tests/tester1-keystore.json` and `tests/tester1.password`, whic
 are never tracked. CI instead provides `GAUNTLET_DEPLOYER_KEYSTORE` (raw JSON or
 base64) and `GAUNTLET_DEPLOYER_PASSWORD`, so no key material lives in the
 repository.
+
+A second wallet is looked up under its own name — `GAUNTLET_TESTER2_KEYSTORE`, or
+the same pair written as `GAUNTLET_TESTER_KEYSTORE2` — and never under the
+deployer's.
 """
 
 import base64
@@ -24,6 +28,41 @@ def wallet_folder() -> Path:
     return Path(configured) if configured else DEFAULT_FOLDER
 
 
+def _env_names(name: str, suffix: str) -> list:
+    """Every environment name this wallet may be filed under.
+
+    `GAUNTLET_TESTER2_KEYSTORE` is the canonical spelling, but a trailing number
+    is just as easy to put on the other side of the field name
+    (`GAUNTLET_TESTER_KEYSTORE2`), so both are accepted rather than losing a
+    perfectly good secret to word order.
+    """
+    upper = name.upper()
+    names = [f"GAUNTLET_{upper}_{suffix}"]
+    stem = upper.rstrip("0123456789")
+    digits = upper[len(stem) :]
+    if digits:
+        names.append(f"GAUNTLET_{stem}_{suffix}{digits}")
+        names.append(f"GAUNTLET_{stem}_{digits}_{suffix}")
+    return names
+
+
+def _first_env(names) -> str:
+    for key in names:
+        value = os.environ.get(key, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def named_env_present(name: str) -> bool:
+    """Whether this named wallet has a keystore of its own in the environment.
+
+    False means a lookup for the name falls back to the deployer's keystore, so
+    the caller would be signing with the deployer under another name.
+    """
+    return bool(_first_env(_env_names(name, "KEYSTORE")))
+
+
 def _keystore_from_env(name: str):
     """The keystore for this name, or the deployer's.
 
@@ -32,7 +71,7 @@ def _keystore_from_env(name: str):
     *different* account must check the address they get back: a single deployer
     secret is not two wallets.
     """
-    raw = os.environ.get(f"GAUNTLET_{name.upper()}_KEYSTORE", "").strip()
+    raw = _first_env(_env_names(name, "KEYSTORE"))
     if not raw:
         raw = os.environ.get(f"{PREFIX}_KEYSTORE", "").strip()
     if not raw:
@@ -61,9 +100,9 @@ def load_account(name: str = DEFAULT_WALLET):
     if password_path.exists():
         password = password_path.read_text(encoding="utf-8").strip()
 
-    env_password = os.environ.get(f"GAUNTLET_{name.upper()}_PASSWORD")
+    env_password = _first_env(_env_names(name, "PASSWORD"))
     if not env_password:
-        env_password = os.environ.get(f"{PREFIX}_PASSWORD")
+        env_password = os.environ.get(f"{PREFIX}_PASSWORD", "").strip()
     if env_password:
         password = env_password
 
@@ -75,13 +114,15 @@ def load_account(name: str = DEFAULT_WALLET):
 
     if data is None:
         raise SystemExit(
-            f"no wallet '{name}' in {folder} and no {PREFIX}_KEYSTORE"
+            f"no wallet '{name}' in {folder} and no "
+            + " or ".join(_env_names(name, "KEYSTORE"))
         )
 
     if not password:
         raise SystemExit(
-            f"[wallet] {name}: no password (tests/{name}.password or "
-            f"{PREFIX}_PASSWORD)"
+            f"[wallet] {name}: no password (tests/{name}.password, "
+            + " or ".join(_env_names(name, "PASSWORD"))
+            + ")"
         )
 
     return Account.from_key(Account.decrypt(data, password))

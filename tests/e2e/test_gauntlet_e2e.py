@@ -19,7 +19,6 @@ Nothing here deploys, and every assertion is a delta, so it can be re-run.
 """
 
 import json
-import os
 import re
 import sys
 import time
@@ -30,7 +29,7 @@ from genlayer_py import create_client, studionet
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from wallet import load_account  # noqa: E402
+from wallet import load_account, named_env_present  # noqa: E402
 
 DEPLOYMENT_PATH = ROOT / "deployment.json"
 ADDRESS_VALUE = re.compile(r"0x[0-9a-fA-F]{40}")
@@ -102,16 +101,16 @@ def stranger(account):
     """
     try:
         other = load_account("tester2")
-    except SystemExit:
-        _STATE["stranger_skip"] = "no second wallet secret is configured"
+    except SystemExit as error:
+        _STATE["stranger_skip"] = str(error)
         return None
     if _hex(other.address) == _hex(account.address):
-        configured = os.environ.get("GAUNTLET_TESTER2_KEYSTORE", "").strip()
         _STATE["stranger_skip"] = (
-            "GAUNTLET_TESTER2_KEYSTORE is empty for this workflow, so tester2 "
-            "falls back to the deployer's keystore"
-            if not configured
-            else "the GAUNTLET_TESTER2_KEYSTORE secret decrypts to the deployer's "
+            "no keystore is filed under tester2 (GAUNTLET_TESTER2_KEYSTORE or "
+            "GAUNTLET_TESTER_KEYSTORE2 is empty), so tester2 falls back to the "
+            "deployer's keystore"
+            if not named_env_present("tester2")
+            else "the keystore filed under tester2 decrypts to the deployer's "
             "own account"
         )
         return None

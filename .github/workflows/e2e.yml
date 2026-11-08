@@ -50,8 +50,8 @@ jobs:
             echo "::notice title=E2E skipped::Add GAUNTLET_DEPLOYER_KEYSTORE and GAUNTLET_DEPLOYER_PASSWORD to drive the deployed contest."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
-          if [ -z "${{ secrets.GAUNTLET_TESTER2_KEYSTORE }}" ]; then
-            echo "::warning title=Stranger cases skipped::GAUNTLET_TESTER2_KEYSTORE is empty, so the second wallet falls back to the deployer and the cases that need a genuine stranger skip."
+          if [ -z "${{ secrets.GAUNTLET_TESTER2_KEYSTORE }}" ] && [ -z "${{ secrets.GAUNTLET_TESTER_KEYSTORE2 }}" ]; then
+            echo "::warning title=Stranger cases skipped::No keystore is filed under tester2 — neither GAUNTLET_TESTER2_KEYSTORE nor GAUNTLET_TESTER_KEYSTORE2 is set — so the second wallet falls back to the deployer and the cases that need a genuine stranger skip."
           fi
 
       - name: Which wallets are configured
@@ -61,7 +61,7 @@ jobs:
           import sys
 
           sys.path.insert(0, "scripts")
-          from wallet import load_account
+          from wallet import load_account, named_env_present
 
           seen = {}
           for name in ("tester1", "tester2"):
@@ -75,7 +75,7 @@ jobs:
                   for other, other_address in seen.items()
                   if other_address.lower() == address.lower()
               ]
-              print(f"{name}: {address}")
+              print(f"{name}: {address} (own keystore: {named_env_present(name)})")
               for other in matches:
                   print(f"  {name} and {other} resolve to the same account")
               seen[name] = address
@@ -85,6 +85,9 @@ jobs:
           GAUNTLET_DEPLOYER_PASSWORD: ${{ secrets.GAUNTLET_DEPLOYER_PASSWORD }}
           GAUNTLET_TESTER2_KEYSTORE: ${{ secrets.GAUNTLET_TESTER2_KEYSTORE }}
           GAUNTLET_TESTER2_PASSWORD: ${{ secrets.GAUNTLET_TESTER2_PASSWORD }}
+          # The same pair under the other word order, which is just as easy to write.
+          GAUNTLET_TESTER_KEYSTORE2: ${{ secrets.GAUNTLET_TESTER_KEYSTORE2 }}
+          GAUNTLET_TESTER_PASSWORD2: ${{ secrets.GAUNTLET_TESTER_PASSWORD2 }}
 
       - name: End to end
         if: steps.secrets.outputs.skip != 'true'
@@ -95,4 +98,7 @@ jobs:
           # pair the second name resolves to the deployer and those cases skip.
           GAUNTLET_TESTER2_KEYSTORE: ${{ secrets.GAUNTLET_TESTER2_KEYSTORE }}
           GAUNTLET_TESTER2_PASSWORD: ${{ secrets.GAUNTLET_TESTER2_PASSWORD }}
+          # The same pair under the other word order.
+          GAUNTLET_TESTER_KEYSTORE2: ${{ secrets.GAUNTLET_TESTER_KEYSTORE2 }}
+          GAUNTLET_TESTER_PASSWORD2: ${{ secrets.GAUNTLET_TESTER_PASSWORD2 }}
         run: pytest tests/e2e -v -s -rs
