@@ -33,6 +33,18 @@ That gives the contract three properties that are unusual together:
   refunded, never confiscated: by the challenger at any time, or by anyone once
   the attempts are spent or the timeout passes.
 
+## Live on GenLayer Studio
+
+`deployment.json` is the single source of truth for the deployed address: the
+**Deploy Contract** workflow deploys the contest once with its frozen rubric,
+writes the file, and commits it back to `main`. Until it exists, nothing is
+deployed.
+
+| | |
+|---|---|
+| **Network** | GenLayer Studio — chainId `61999` (`0xf22f`), test GEN only |
+| **Evidence** | [Actions](https://github.com/weels007/genlayer-gauntlet/actions) — the direct suite, the Studio suite, and every deployment |
+
 ## Lifecycle
 
 ```mermaid
@@ -147,6 +159,11 @@ Residual risks, stated plainly:
 | Suite | What it covers | Run |
 |---|---|---|
 | **Direct** | the frozen rubric, crowning, every challenge path, the score comparison, refunds, consensus on the vector | `pytest tests/direct -v` |
+| **Studio** | the deployed contract: a live crowning, a challenge scored by the committee, the fee landing where the rubric says, and the refusals | `pytest tests/integration -v -s` |
+
+Every assertion in the Studio suite is a delta — a count, a balance, a ledger
+total — so it can be re-run against the same contest without an earlier run
+leaking into it.
 
 ## Quick start
 
@@ -155,6 +172,7 @@ pip install -r requirements.txt
 
 genvm-lint check contracts/Gauntlet.py   # forbidden imports, storage, nondet misuse
 pytest tests/direct -v                  # the whole suite, in memory, milliseconds
+pytest tests/integration -v -s          # the deployed contest, live
 
 python scripts/deploy.py                # deploy once, record deployment.json
 ```
@@ -163,14 +181,21 @@ The direct suite mocks the page and the model; the clock and every money path ar
 exercised in memory, including a challenge that wins, one that defends, one the
 committee cannot ground, and one that is voided after the attempt cap.
 
+The live suites sign with a throwaway Studio account that the repository keeps in
+Actions secrets, so no key material is committed.
+
 ## Layout
 
 ```text
-contracts/Gauntlet.py      the contest
-tests/direct/              crowning, challenges, money, consensus
-scripts/deploy.py          deploys once with the rubric, records deployment.json
-scripts/wallet.py          keystore from tests/ or a repository secret
-.github/workflows/ci.yml   genvm-lint + the direct suite
+contracts/Gauntlet.py            the contest
+tests/direct/                    crowning, challenges, money, consensus
+tests/integration/               the deployed contest, live
+scripts/deploy.py                deploys once with the rubric, records deployment.json
+scripts/wallet.py                keystore from tests/ or a repository secret
+deployment.json                  the deployed address (written by the workflow)
+.github/workflows/ci.yml         genvm-lint + the direct suite
+.github/workflows/integration.yml  the Studio suite
+.github/workflows/deploy-contract.yml  one deploy, address committed back
 ```
 
 ## License

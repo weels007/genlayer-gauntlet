@@ -1,0 +1,56 @@
+name: Integration (studionet)
+
+# Real-network check against the PINNED contract in deployment.json: the frozen
+# rubric, a live crowning, a challenge scored by the committee, the fee landing
+# where the rubric says, and the refusals that protect it.
+#
+# Needs two repository secrets: GAUNTLET_DEPLOYER_KEYSTORE and
+# GAUNTLET_DEPLOYER_PASSWORD. Until they exist the job skips with a notice.
+
+on:
+  workflow_dispatch:
+
+  # A deploy commits deployment.json with the workflow token, and a push made
+  # with that token never starts another workflow. workflow_run is the supported
+  # chain.
+  workflow_run:
+    workflows: ["Deploy Contract"]
+    types: [completed]
+
+  push:
+    paths:
+      - "tests/integration/**"
+      - "deployment.json"
+      - ".github/workflows/integration.yml"
+
+concurrency:
+  group: integration
+  cancel-in-progress: false
+
+jobs:
+  studionet:
+    name: Studio-mode tests
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+
+      - name: Check the wallet secrets
+        id: secrets
+        run: |
+          if [ -z "${{ secrets.GAUNTLET_DEPLOYER_KEYSTORE }}" ]; then
+            echo "::notice title=Studio suite skipped::Add GAUNTLET_DEPLOYER_KEYSTORE and GAUNTLET_DEPLOYER_PASSWORD to drive the deployed contract."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Studio suite
+        if: steps.secrets.outputs.skip != 'true'
+        env:
+          GAUNTLET_DEPLOYER_KEYSTORE: ${{ secrets.GAUNTLET_DEPLOYER_KEYSTORE }}
+          GAUNTLET_DEPLOYER_PASSWORD: ${{ secrets.GAUNTLET_DEPLOYER_PASSWORD }}
+        run: pytest tests/integration -v -s
