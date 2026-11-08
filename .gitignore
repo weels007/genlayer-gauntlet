@@ -1,0 +1,16 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Key material — never commit a wallet, keystore or private key.
+*.pem
+*.key
+keystore*.json
+*-keystore.json
+*.password
