@@ -133,6 +133,18 @@ def main() -> int:
     if not address:
         raise SystemExit(f"[deploy] no contract address in the receipt: {receipt}")
 
+    # An address in a receipt is not proof of the contest we meant to create: read
+    # the frozen rubric back before recording anything.
+    try:
+        contest = client.read_contract(address, "get_contest")
+    except Exception as error:
+        raise SystemExit(f"[deploy] the deployed contest does not answer: {error}")
+
+    if contest.get("brief") != BRIEF or int(contest.get("criteria_count", 0)) != CRITERIA_COUNT:
+        raise SystemExit(
+            f"[deploy] the contest at {address} has the wrong rubric: {contest}"
+        )
+
     write_deployment(address, revision)
     print(f"[deploy] Gauntlet is at {address}")
     print(f"[deploy] explorer: https://explorer-studio.genlayer.com/address/{address}")
