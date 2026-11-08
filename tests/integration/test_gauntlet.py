@@ -232,7 +232,28 @@ def test_02_the_belt_has_an_owner(client, account, contract):
 # ---------------------------------------------------------------------------
 
 
+def _settle_our_tail(client, account, contract):
+    """Leave no open challenge and no credit of ours before a delta is measured.
+
+    Two suites drive the same deployed contract, and a run that failed midway can
+    leave an open challenge or a credit behind. Clearing our own leftovers keeps
+    the deltas below honest without touching anybody else's funds.
+    """
+    open_id = _read(client, contract, "get_open_challenge")
+    if open_id:
+        challenge = _read(client, contract, "get_challenge", [open_id])
+        if challenge["status"] == "OPEN" and _hex(challenge["challenger"]) == _hex(
+            account.address
+        ):
+            _expect_ok(client, account, contract, "withdraw_challenge", [open_id])
+
+    if int(_read(client, contract, "get_credit", [account.address])) > 0:
+        _expect_ok(client, account, contract, "withdraw_credit")
+
+
 def test_03_a_challenge_is_scored_and_the_fee_moves(client, account, contract):
+    _settle_our_tail(client, account, contract)
+
     champion = _champion(client, contract)
     url = RIVAL_URL if champion["url"] != RIVAL_URL else CHAMPION_URL
 

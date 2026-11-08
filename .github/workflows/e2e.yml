@@ -21,8 +21,10 @@ on:
       - "deployment.json"
       - ".github/workflows/e2e.yml"
 
+# Shared with the Studio suite: both drive the same deployed contest, so they
+# must not move fees at the same time.
 concurrency:
-  group: e2e
+  group: live-suite
   cancel-in-progress: false
 
 jobs:

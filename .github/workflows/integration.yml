@@ -23,8 +23,11 @@ on:
       - "deployment.json"
       - ".github/workflows/integration.yml"
 
+# The live suites share one concurrency group: the Studio suite and the e2e
+# suite both move fees on the same deployed contract, so running them at the same
+# time would interleave the very ledger deltas they assert on.
 concurrency:
-  group: integration
+  group: live-suite
   cancel-in-progress: false
 
 jobs:

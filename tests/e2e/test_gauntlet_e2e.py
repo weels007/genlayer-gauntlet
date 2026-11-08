@@ -250,12 +250,29 @@ def test_02_the_belt_has_an_owner(client, account, contract):
 # ---------------------------------------------------------------------------
 
 
+def _settle_our_tail(client, account, contract):
+    """Clear our own open challenge and credit before a delta is measured."""
+    open_id = _read(client, contract, "get_open_challenge")
+    if open_id:
+        challenge = _read(client, contract, "get_challenge", [open_id])
+        if challenge["status"] == "OPEN" and _hex(challenge["challenger"]) == _hex(
+            account.address
+        ):
+            _expect_ok(client, account, contract, "withdraw_challenge", [open_id])
+
+    if _credit(client, contract, account) > 0:
+        _expect_ok(client, account, contract, "withdraw_credit")
+
+
 def test_03_a_second_challenge_becomes_a_credit(client, account, contract):
+    _settle_our_tail(client, account, contract)
+
     before = _ledger(client, contract)
     locked_before = int(before["locked_total"])
     out_before = int(before["total_out"])
 
     first = _open_challenge(client, account, contract)
+    _STATE["challenge"] = first
 
     # A second fee while the first challenge is still open is not a loss.
     _expect_ok(client, account, contract, "challenge", [RIVAL_URL], value=FEE)
@@ -268,7 +285,8 @@ def test_03_a_second_challenge_becomes_a_credit(client, account, contract):
     assert int(ledger["total_out"]) == out_before
     assert _invariant_holds(client, contract)
 
-    # Keep the id for the next case.
+    # Keep the id for the next case; set right away so a failed assertion here
+    # does not cascade into the cases that follow.
     _STATE["challenge"] = first
 
 
@@ -327,6 +345,7 @@ def test_05_the_open_challenge_and_the_credit_come_back(client, account, contrac
 
 
 def test_06_void_is_refused_before_it_is_earned(client, account, contract):
+    _settle_our_tail(client, account, contract)
     challenge_id = _open_challenge(client, account, contract)
 
     _expect_denied(client, account, contract, "void_challenge", [challenge_id])
