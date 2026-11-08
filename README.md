@@ -42,6 +42,7 @@ deployed.
 
 | | |
 |---|---|
+| **Contract** | [`0xDeF418E6b0D4002E6D493B7B4183cDF626454B2C`](https://explorer-studio.genlayer.com/address/0xDeF418E6b0D4002E6D493B7B4183cDF626454B2C) |
 | **Network** | GenLayer Studio — chainId `61999` (`0xf22f`), test GEN only |
 | **Evidence** | [Actions](https://github.com/weels007/genlayer-gauntlet/actions) — the direct suite, the Studio suite, and every deployment |
 
