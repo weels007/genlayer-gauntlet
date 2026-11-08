@@ -1,0 +1,54 @@
+name: E2E (deployed contract)
+
+# The money paths the Studio suite leaves out, against the PINNED contest in
+# deployment.json: a second challenge while one is open becomes a credit, the
+# open challenge and the credit both come back, void is refused before it is
+# earned, and a stranger cannot take another account's fee.
+
+on:
+  workflow_dispatch:
+
+  # A deploy commits deployment.json with the workflow token, and a push made
+  # with that token never starts another workflow. workflow_run is the supported
+  # chain.
+  workflow_run:
+    workflows: ["Deploy Contract"]
+    types: [completed]
+
+  push:
+    paths:
+      - "tests/e2e/**"
+      - "deployment.json"
+      - ".github/workflows/e2e.yml"
+
+concurrency:
+  group: e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: Money paths on the deployed contest
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+
+      - name: Check the wallet secrets
+        id: secrets
+        run: |
+          if [ -z "${{ secrets.GAUNTLET_DEPLOYER_KEYSTORE }}" ]; then
+            echo "::notice title=E2E skipped::Add GAUNTLET_DEPLOYER_KEYSTORE and GAUNTLET_DEPLOYER_PASSWORD to drive the deployed contest."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: End to end
+        if: steps.secrets.outputs.skip != 'true'
+        env:
+          GAUNTLET_DEPLOYER_KEYSTORE: ${{ secrets.GAUNTLET_DEPLOYER_KEYSTORE }}
+          GAUNTLET_DEPLOYER_PASSWORD: ${{ secrets.GAUNTLET_DEPLOYER_PASSWORD }}
+        run: pytest tests/e2e -v -s

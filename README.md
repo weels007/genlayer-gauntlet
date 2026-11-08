@@ -161,6 +161,7 @@ Residual risks, stated plainly:
 |---|---|---|
 | **Direct** | the frozen rubric, crowning, every challenge path, the score comparison, refunds, consensus on the vector | `pytest tests/direct -v` |
 | **Studio** | the deployed contract: a live crowning, a challenge scored by the committee, the fee landing where the rubric says, and the refusals | `pytest tests/integration -v -s` |
+| **End to end** | the deployed contract, the money paths around the judgement: a second challenge as a credit, both refunds, the void guard, and a stranger reaching for another account's fee | `pytest tests/e2e -v -s` |
 
 Every assertion in the Studio suite is a delta — a count, a balance, a ledger
 total — so it can be re-run against the same contest without an earlier run
@@ -174,6 +175,7 @@ pip install -r requirements.txt
 genvm-lint check contracts/Gauntlet.py   # forbidden imports, storage, nondet misuse
 pytest tests/direct -v                  # the whole suite, in memory, milliseconds
 pytest tests/integration -v -s          # the deployed contest, live
+pytest tests/e2e -v -s                  # the deployed contest's money paths
 
 python scripts/deploy.py                # deploy once, record deployment.json
 ```
@@ -191,11 +193,13 @@ Actions secrets, so no key material is committed.
 contracts/Gauntlet.py            the contest
 tests/direct/                    crowning, challenges, money, consensus
 tests/integration/               the deployed contest, live
+tests/e2e/                       the deployed contest's money paths
 scripts/deploy.py                deploys once with the rubric, records deployment.json
 scripts/wallet.py                keystore from tests/ or a repository secret
 deployment.json                  the deployed address (written by the workflow)
 .github/workflows/ci.yml         genvm-lint + the direct suite
 .github/workflows/integration.yml  the Studio suite
+.github/workflows/e2e.yml        the money paths on the deployed contest
 .github/workflows/deploy-contract.yml  one deploy, address committed back
 ```
 
