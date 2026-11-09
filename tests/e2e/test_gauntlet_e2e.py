@@ -153,6 +153,27 @@ def _definite_rollback(result) -> bool:
     return isinstance(leader, dict) and leader.get("execution_result") == "ERROR"
 
 
+def _rollback_text(result) -> str:
+    """Whatever the receipt says about why execution failed."""
+    if not isinstance(result, dict):
+        return str(result)
+
+    bits = []
+    leader = (result.get("consensus_data") or {}).get("leader_receipt")
+    if isinstance(leader, list):
+        leader = leader[0] if leader else None
+    if isinstance(leader, dict):
+        for key in ("message", "error_message", "error", "result"):
+            value = leader.get(key)
+            if isinstance(value, (str, bytes)):
+                bits.append(str(value))
+    for key in ("error_message", "message"):
+        value = result.get(key)
+        if isinstance(value, (str, bytes)):
+            bits.append(str(value))
+    return " ".join(part for part in bits if part)
+
+
 def _attempt(client, account, contract, method, args=None, value=0):
     try:
         tx_hash = client.write_contract(
@@ -358,6 +379,15 @@ def test_04_a_stranger_cannot_take_the_fee_back(
     # session account instead, and the test would prove nothing.
     touched = _attempt(client, stranger, contract, "withdraw_challenge", [challenge_id])
     assert not _succeeded(touched), "a stranger withdrew somebody else's fee"
+
+    # A refusal only proves custody if the *contract* is the one refusing: an
+    # unfunded wallet or a network fault would look identical from out here.
+    text = _rollback_text(touched).lower()
+    if text:
+        assert "challenger" in text, (
+            "the stranger was stopped, but not by the contract's own "
+            f"refusal: {text}"
+        )
     assert _read(client, contract, "get_challenge", [challenge_id])["status"] == "OPEN"
 
 
